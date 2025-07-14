@@ -1,0 +1,12 @@
+name: RNAEmbed
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch
+  - numpy
+  - transformers
+  - pip
+  - pip:
+    - accelerate

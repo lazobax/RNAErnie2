@@ -49,39 +49,57 @@ def get_embeddings(sequences: list[str], model, tokenizer):
     
     return mean_embeddings
 
-def save_embeddings(embeddings: np.ndarray, output_path: str):
+def save_embeddings(embeddings: np.ndarray, identifiers: list[str], output_path_base: str):
     """
-    Saves the embeddings to a NumPy file.
+    Saves the embeddings and their identifiers to a NumPy NPZ file and a TSV file.
     
     Args:
         embeddings (np.ndarray): The embeddings to save.
-        output_path (str): The path to the output file.
+        identifiers (list[str]): The list of identifiers for the embeddings.
+        output_path_base (str): The base path for the output files (without extension).
     """
-    np.save(output_path, embeddings)
+    npz_path = f"{output_path_base}.npz"
+    tsv_path = f"{output_path_base}.tsv"
+    
+    # Save as NPZ
+    np.savez(npz_path, embeddings=embeddings, identifiers=identifiers)
+    print(f"Embeddings saved to {npz_path}")
 
-def parse_fasta(fasta_file: str) -> list[str]:
+    # Save as TSV
+    with open(tsv_path, 'w') as f:
+        for identifier, embedding in zip(identifiers, embeddings):
+            embedding_str = "\t".join(map(str, embedding))
+            f.write(f"{identifier}\t{embedding_str}\n")
+    print(f"Embeddings saved to {tsv_path}")
+
+def parse_fasta(fasta_file: str) -> tuple[list[str], list[str]]:
     """
-    Parses a FASTA file and returns a list of sequences.
+    Parses a FASTA file and returns a list of identifiers and a list of sequences.
     
     Args:
         fasta_file (str): The path to the FASTA file.
         
     Returns:
-        A list of sequences from the FASTA file.
+        A tuple containing a list of identifiers and a list of sequences from the FASTA file.
     """
+    identifiers = []
     sequences = []
     with open(fasta_file, 'r') as f:
         sequence = ""
+        identifier = ""
         for line in f:
             if line.startswith('>'):
                 if sequence:
                     sequences.append(sequence)
+                    identifiers.append(identifier)
                 sequence = ""
+                identifier = line[1:].strip().split()[0]
             else:
                 sequence += line.strip()
         if sequence:
             sequences.append(sequence)
-    return sequences
+            identifiers.append(identifier)
+    return identifiers, sequences
 
 def main():
     parser = argparse.ArgumentParser(description="Generate embeddings for RNA sequences using RNAErnie.")
@@ -103,17 +121,18 @@ def main():
         help="Path to a FASTA file containing RNA sequences."
     )
     parser.add_argument(
-        "--output_file",
+        "--output_path_base",
         type=str,
-        default="rna_embeddings.npy",
-        help="The path to save the embeddings NumPy file."
+        default="rna_embeddings",
+        help="The base path to save the output files (e.g., 'rna_embeddings' will create 'rna_embeddings.npz' and 'rna_embeddings.tsv')."
     )
     args = parser.parse_args()
 
     if args.fasta_file:
-        rna_sequences = parse_fasta(args.fasta_file)
+        identifiers, rna_sequences = parse_fasta(args.fasta_file)
     else:
         rna_sequences = args.sequences
+        identifiers = [f"seq_{i}" for i in range(len(rna_sequences))]
 
     # 1. Load the model and tokenizer
     print("Loading model and tokenizer...")
@@ -126,8 +145,8 @@ def main():
     print(f"Embeddings generated with shape: {embeddings.shape}")
     
     # 3. Save the embeddings
-    print(f"Saving embeddings to {args.output_file}...")
-    save_embeddings(embeddings.numpy(), args.output_file)
+    print(f"Saving embeddings with base path {args.output_path_base}...")
+    save_embeddings(embeddings.numpy(), identifiers, args.output_path_base)
     print("Embeddings saved.")
 
 if __name__ == "__main__":
